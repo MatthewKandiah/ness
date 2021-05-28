@@ -4,33 +4,30 @@ import numpy.testing
 from scipy.sparse import csr_matrix
 
 class TestBuildHamSS(unittest.TestCase):
+    def setUp(self):
+        self.system_parameter_dict = {"epsilon":2, "Delta":3, "interqubit_coupling_strength":4}
+        cold_bath_parameter_dict = {"alpha":5, "Gamma":6, "omega0":7}
+        hot_bath_parameter_dict = {"alpha":8, "Gamma":9, "omega0":10}
+        self.cold_bath_spectral_density = spectral_density('underdamped', cold_bath_parameter_dict)
+        self.hot_bath_spectral_density = spectral_density('underdamped', hot_bath_parameter_dict)
+        
     def test_dimensions_HamSS(self):
-        HamSS0 = build_HamSS(0,2,3,4,5,6,7,8,9,1)
+        HamSS0 = build_HamSS(0,self.system_parameter_dict, self.cold_bath_spectral_density,self.hot_bath_spectral_density, "simple")
         self.assertEqual(HamSS0.dims,[[2,2,1,1],[2,2,1,1]])
         self.assertEqual(HamSS0.shape, (4,4))
         self.assertEqual(HamSS0.type, 'oper')
         self.assertTrue(HamSS0.check_herm())
         
-        HamSS3 = build_HamSS(3,4,5,6,7,8,9,1,2,3)
+        HamSS3 = build_HamSS(3,self.system_parameter_dict, self.cold_bath_spectral_density, self.hot_bath_spectral_density, "simple")
         self.assertEqual(HamSS3.dims,[[2,2,4,4],[2,2,4,4]])
         self.assertEqual(HamSS3.shape, (64,64))
         self.assertEqual(HamSS3.type, 'oper')
         self.assertTrue(HamSS3.check_herm())
         
     def test_convert_to_max_excitation_number_truncation(self):
-        eps = 1
-        Del = 1
-        g = 0.02
-        sC = 0.2
-        GamC = 0.4
-        om0C = 1.1
-        sH = 0.2
-        GamH = 0.4
-        om0H = 0.9
-        
-        hamSS1 = build_HamSS(1,eps,Del,g,sC,GamC,om0C,sH,GamH,om0H, truncation_method = "max_excitation_number")
-        hamSS2 = build_HamSS(2,eps,Del,g,sC,GamC,om0C,sH,GamH,om0H, truncation_method = "max_excitation_number")
-        hamSS3 = build_HamSS(3,eps,Del,g,sC,GamC,om0C,sH,GamH,om0H, truncation_method = "max_excitation_number")
+        hamSS1 = build_HamSS(1,self.system_parameter_dict, self.cold_bath_spectral_density, self.hot_bath_spectral_density,"max_excitation_number")
+        hamSS2 = build_HamSS(2,self.system_parameter_dict, self.cold_bath_spectral_density, self.hot_bath_spectral_density,"max_excitation_number")
+        hamSS3 = build_HamSS(3,self.system_parameter_dict, self.cold_bath_spectral_density, self.hot_bath_spectral_density,"max_excitation_number")
 
         self.assertEqual(hamSS1.type, 'oper')
         self.assertEqual(hamSS2.type, 'oper')
@@ -46,32 +43,35 @@ class TestBuildHamSS(unittest.TestCase):
         
 
 class TestBuildLiouvillian(unittest.TestCase):
+    def setUp(self):
+        self.system_parameter_dict = {"epsilon":2, "Delta":3, "interqubit_coupling_strength":4}
+        cold_bath_parameter_dict = {"alpha":5, "Gamma":6, "omega0":7}
+        hot_bath_parameter_dict = {"alpha":8, "Gamma":9, "omega0":10}
+        self.cold_bath_spectral_density = spectral_density('underdamped', cold_bath_parameter_dict)
+        self.hot_bath_spectral_density = spectral_density('underdamped', hot_bath_parameter_dict)
+        cold_bath_temperature = 0.2
+        hot_bath_temperature = 5
+        self.cold_bath = bath(self.cold_bath_spectral_density, cold_bath_temperature)
+        self.hot_bath = bath(self.hot_bath_spectral_density, hot_bath_temperature)
+
     def test_dimensions_Liouvillian(self):
-        Liouvillian3 = build_Liouvillian(3,4,5,6,7,8,9,1,2,3,1.2,4.3)
+        Liouvillian3 = build_Liouvillian(3,self.system_parameter_dict, self.cold_bath, self.hot_bath, "simple")
         self.assertEqual(Liouvillian3.type, 'super')
         self.assertEqual(Liouvillian3.shape, (64**2, 64**2))
         
     def test_steady_state_dimensions(self) :
-        Liouvillian3 = build_Liouvillian(3,4,5,6,7,8,9,1,2,3,1.2,4.3)
-        rhoSS_steady = solve_supersystem_steady_state(Liouvillian3)
+        Liouvillian3 = build_Liouvillian(3,self.system_parameter_dict, self.cold_bath, self.hot_bath, "simple")
+        rhoSS_steady = solve_supersystem_steady_state(Liouvillian3,'direct',1e-10)
         self.assertEqual(rhoSS_steady.type, 'oper')
         self.assertEqual(rhoSS_steady.shape, (64,64))
         self.assertEqual(rhoSS_steady.dims, [[2,2,4,4],[2,2,4,4]])
         
-        rhoS_steady = solve_system_steady_state(Liouvillian3)
+        rhoS_steady = solve_system_steady_state(Liouvillian3,'direct',1e-10)
         self.assertEqual(rhoS_steady.type, 'oper')
         self.assertEqual(rhoS_steady.shape, (4,4))
         self.assertEqual(rhoS_steady.dims, [[2,2],[2,2]])
         
     def test_find_max_differences_between_QObjs(self):
-        with self.subTest("Finding maximum absolute differences"):
-            self.assertEqual(find_max_absolute_difference_between_QObjs(sigmaz(), sigmaz()), 0)
-            self.assertEqual(find_max_absolute_difference_between_QObjs(sigmaz(),  qeye(2)), 2)
-            self.assertEqual(find_max_absolute_difference_between_QObjs(sigmaz(), sigmax()), 1)
-        with self.subTest("Finding maximum relative differences"):
-            self.assertEqual(find_max_relative_difference_between_QObjs(sigmaz(), sigmaz()), 0)
-            self.assertEqual(find_max_relative_difference_between_QObjs(sigmaz(),  qeye(2)), 2)
-            self.assertEqual(find_max_relative_difference_between_QObjs(sigmaz(), sigmax()), 1)
         with self.subTest("Finding maximum population differences"):
             self.assertEqual(find_max_absolute_difference_between_populations(sigmaz(),sigmaz()), 0)
             self.assertEqual(find_max_absolute_difference_between_populations(sigmaz(), qeye(2)), 2)
@@ -79,9 +79,9 @@ class TestBuildLiouvillian(unittest.TestCase):
             self.assertEqual(find_max_absolute_difference_between_populations(sigmax(),sigmay()), 0)
         
     def test_max_excitation_number_truncation_Liouvillian(self):
-        Liouvillian1 = build_Liouvillian(1,4,5,6,7,8,9,1,2,3,1.2,4.3, truncation_method = "max_excitation_number")
-        Liouvillian2 = build_Liouvillian(2,4,5,6,7,8,9,1,2,3,1.2,4.3, truncation_method = "max_excitation_number")
-        Liouvillian3 = build_Liouvillian(3,4,5,6,7,8,9,1,2,3,1.2,4.3, truncation_method = "max_excitation_number")
+        Liouvillian1 = build_Liouvillian(1,self.system_parameter_dict, self.cold_bath, self.hot_bath, "max_excitation_number")
+        Liouvillian2 = build_Liouvillian(2,self.system_parameter_dict, self.cold_bath, self.hot_bath, "max_excitation_number")
+        Liouvillian3 = build_Liouvillian(3,self.system_parameter_dict, self.cold_bath, self.hot_bath, "max_excitation_number")
         
         self.assertEqual(Liouvillian1.type, 'super')
         self.assertEqual(Liouvillian2.type, 'super')
@@ -149,7 +149,7 @@ class TestThermalisation(unittest.TestCase) :
         
 
     # expect supersystem to thermalise to temperature of baths if baths are at equal temperature
-    @unittest.skip('Doesn\'t converge')
+    @unittest.skip('Don\'t think this is as good a test as we thought, difficult to say how similar these should actually be. Non-secular master equation => similar, but not the same.')
     def test_baths_at_same_temperature(self) :
         eps = 0
         Del = 1
@@ -192,7 +192,7 @@ class TestThermalisation(unittest.TestCase) :
 
     # expect qubit-RC supersystems to approximately thermalise separately to their local bath if interqubit coupling is set to zero
     # plot results to compare to the results in Jake & Ahsan's PRA paper. 
-    @unittest.skip('Saving time')
+    @unittest.skip('Move from tests to its own script')
     def test_non_interacting_qubits(self) :
         # define parameters
         # choose parameters to match Fig 4A from the PRA paper 
@@ -236,30 +236,6 @@ class TestThermalisation(unittest.TestCase) :
             rho_ge_cold_array[j] = steady_state_cold_qubit.full()[1][0]
             rho_ge_hot_array[j]  = steady_state_hot_qubit.full()[1][0] 
         
-        # calculate Gibbs states
-        '''
-        RC_frequency_cold = calculate_RC_frequency(system_bath_coupling,Gamma1, peak_frequency1)
-        RC_system_coupling_cold = calculate_RC_system_coupling_strength(system_bath_coupling,Gamma1, peak_frequency1)
-        free_Hamiltonian_cold_qubit_and_RC = (eps/2) * tensor(sigmaz(),qeye(RC_dims)) + (delta/2) * tensor(sigmax(),qeye(RC_dims)) + RC_frequency_cold * tensor(qeye(2),num(RC_dims)) + RC_system_coupling_cold * tensor(sigmaz(),create(RC_dims)+destroy(RC_dims))
-        gibbs_state_cold_qubit_and_RC = (-inverse_temperature_cold * free_Hamiltonian_cold_qubit_and_RC).expm()
-        partition_function_cold = gibbs_state_cold_qubit_and_RC.norm()
-        gibbs_state_cold_qubit_and_RC = gibbs_state_cold_qubit_and_RC / partition_function_cold
-        with self.subTest("Trace of cold qubit & RC Gibbs state"):
-            np.testing.assert_almost_equal(gibbs_state_cold_qubit_and_RC.norm(),1)
-        
-        RC_frequency_hot = calculate_RC_frequency(system_bath_coupling,Gamma2, peak_frequency2)
-        RC_system_coupling_hot = calculate_RC_system_coupling_strength(system_bath_coupling,Gamma2, peak_frequency2)
-        free_Hamiltonian_hot_qubit_and_RC = (eps/2) * tensor(sigmaz(),qeye(RC_dims)) + (delta/2) * tensor(sigmax(),qeye(RC_dims)) + RC_frequency_hot * tensor(qeye(2),num(RC_dims)) + RC_system_coupling_hot * tensor(sigmaz(),create(RC_dims)+destroy(RC_dims))
-        gibbs_state_hot_qubit_and_RC = (-inverse_temperature_hot * free_Hamiltonian_hot_qubit_and_RC).expm()
-        partition_function_hot  = gibbs_state_hot_qubit_and_RC.norm()
-        gibbs_state_hot_qubit_and_RC = gibbs_state_hot_qubit_and_RC / partition_function_hot
-        with self.subTest("Trace of hot qubit & RC Gibbs state"):
-            np.testing.assert_almost_equal(gibbs_state_hot_qubit_and_RC.norm(),1)
-            
-        # compare Gibbs states and reduced steady states - expect them to be similar but not necessarily the same
-        np.testing.assert_allclose(steady_state_cold_qubit_and_RC, gibbs_state_cold_qubit_and_RC, atol = 0.05)
-        np.testing.assert_allclose(steady_state_hot_qubit_and_RC, gibbs_state_hot_qubit_and_RC, atol = 0.05)
-        '''
         # plot bath spectral densities to check they are as expected
         frequency_array = np.arange(0,500,1)
         spectral_density_cold_array = system_bath_coupling * Gamma1 * peak_frequency1**2 * frequency_array / ((peak_frequency1**2 - frequency_array**2)**2 + (Gamma1*frequency_array)**2)
