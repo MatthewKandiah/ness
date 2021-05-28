@@ -192,7 +192,7 @@ class TestThermalisation(unittest.TestCase) :
 
     # expect qubit-RC supersystems to approximately thermalise separately to their local bath if interqubit coupling is set to zero
     # plot results to compare to the results in Jake & Ahsan's PRA paper. 
-    # @unittest.skip('Not ready yet')
+    @unittest.skip('Saving time')
     def test_non_interacting_qubits(self) :
         # define parameters
         # choose parameters to match Fig 4A from the PRA paper 

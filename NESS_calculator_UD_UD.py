@@ -4,59 +4,56 @@ from qutip import *
 import matplotlib.pyplot as plt
 import time
 
-START_TIME = time.time()
-
-'''
-Filenames defined here
-'''
-PLOT_FILENAME = "results.png"
-
+# set to true to print extra information to console
+DEBUG = True
 '''
 Choose steadystate solver method (see qutip documentation for valid options)
 '''
 SOLVER_METHOD = "iterative-gmres"
 SOLVER_TOLERANCE = 1e-12
 
-'''
-Define model parameters here
-'''
-epsilon = 0
-Delta = 1
-g = 0.02
-s_cold = 0.5
-Gamma_cold = 0.04
-omega0_cold = 1.1
-s_hot = 0.2
-Gamma_hot = 0.01
-omega0_hot = 0.9
-bath_temperature_cold = 0.01
-beta_cold = 1/bath_temperature_cold
-
-minimum_hot_bath_temperature = 0.01
-maximum_hot_bath_temperature = 10
-number_of_plot_points = 100
-hot_bath_temperatures = np.arange(minimum_hot_bath_temperature, maximum_hot_bath_temperature, (maximum_hot_bath_temperature-minimum_hot_bath_temperature)/number_of_plot_points)
-hot_bath_betas = 1/hot_bath_temperatures
-
-convergence_atol = 0.001
-
-# set to true to print extra information to console
-DEBUG = True
-def debug_message(message_string):
-    if DEBUG:
-        print(message_string)
-
-
 # system operators, expressed in sigma_z eigenbases
 sigz_cold = tensor(sigmaz(), qeye(2))
 sigz_hot  = tensor(qeye(2), sigmaz())
 sigx_cold = tensor(sigmax(), qeye(2))
 sigx_hot  = tensor(qeye(2), sigmax())
-      
-# define system Hamiltonian
-def HamS(epsilon, Delta, interqubit_coupling_strength):
-    return (epsilon/2) * (sigz_cold + sigz_hot) + (Delta/2) * (sigx_cold + sigx_hot) + interqubit_coupling_strength*sigz_cold*sigz_hot
+
+def debug_message(message_string):
+    if DEBUG:
+        print(message_string)
+
+class spectral_density:
+    allowed_types = ['underdamped']
     
+    def __init__(self, type, parameter_dict):
+        if type in allowed_types:
+            self.type = type 
+        else:
+            raise ValueError
+        if type == 'underdamped':
+            self.alpha = parameter_dict[alpha]
+            self.Gamma = parameter_dict[Gamma] 
+            self.omega0 = parameter_dict[omega0]
+
+    def get_value(frequency):
+        if type == 'underdamped':
+            value = self.alpha * self.Gamma * self.omega0**2 * frequency / ((self.omega0**2 - frequency**2)**2 + (Gamma*frequency)**2)
+        
+        return value
+
+    def get_mapped_parameters():
+        if type == 'underdamped':
+            RC_frequency = self.omega0
+            RC_system_coupling_strength = np.sqrt(np.pi * self.alpha * self.omega0 / 2)
+            RC_environment_coupling_strength = self.Gamma / (2 * np.pi * self.omega0)
+
+        return RC_frequency, RC_system_coupling_strength, RC_environment_coupling_strength
+
+class bath:
+    def __init__(self, spectral_density, temperature):
+        self.temperature = temperature
+        self.spectral_density = spectral_density
+   
 
 # calculate reaction coordinate frame parameters from original representation parameters
 # use same notation as accompanying notes
@@ -73,7 +70,11 @@ def calculate_RC_system_coupling_strength(s, Gamma, omega0):
     
 def calculate_RC_environment_coupling_strength(s, Gamma, omega0):
     return Gamma / (2 * np.pi * omega0)
-        
+
+# define system Hamiltonian
+def HamS(epsilon, Delta, interqubit_coupling_strength):
+    return (epsilon/2) * (sigz_cold + sigz_hot) + (Delta/2) * (sigx_cold + sigx_hot) + interqubit_coupling_strength*sigz_cold*sigz_hot
+
 # construct super-system Hamiltonian for given maximum reaction coordinate occupation number
 # order all tensor products as follows
 """
@@ -82,8 +83,7 @@ cold qubit TENSOR hot qubit TENSOR cold RC TENSOR hot RC
 """
 def build_HamSS(max_occupation_number,epsilon, Delta, interqubit_coupling_strength,
                 s_cold, Gamma_cold, omega0_cold, s_hot, Gamma_hot, omega0_hot, truncation_method = "simple") :
-    # reaction coordinate truncated space dimensions
-    
+
     # cold RC values 
     RC_frequency_cold = calculate_RC_frequency(s_cold, Gamma_cold, omega0_cold)
     RC_system_coupling_strength_cold = calculate_RC_system_coupling_strength(s_cold, Gamma_cold, omega0_cold)
@@ -365,6 +365,36 @@ def convert_concurrence_to_entanglement_of_formation(concurrence):
     return binary_entropy(x)
         
 if __name__ == "__main__":
+
+    START_TIME = time.time()
+
+    '''
+    Filenames defined here
+    '''
+    PLOT_FILENAME = "results.png"
+
+    '''
+    Define model parameters here
+    '''
+    epsilon = 0
+    Delta = 1
+    g = 0.02
+    s_cold = 0.5
+    Gamma_cold = 0.04
+    omega0_cold = 1.1
+    s_hot = 0.2
+    Gamma_hot = 0.01
+    omega0_hot = 0.9
+    bath_temperature_cold = 0.01
+    beta_cold = 1/bath_temperature_cold
+
+    minimum_hot_bath_temperature = 0.01
+    maximum_hot_bath_temperature = 10
+    number_of_plot_points = 2
+    hot_bath_temperatures = np.arange(minimum_hot_bath_temperature, maximum_hot_bath_temperature, (maximum_hot_bath_temperature-minimum_hot_bath_temperature)/number_of_plot_points)
+    hot_bath_betas = 1/hot_bath_temperatures
+
+    convergence_atol = 0.001
 
     """
     Plot the two bath spectral densities
