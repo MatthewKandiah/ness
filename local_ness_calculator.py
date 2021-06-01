@@ -37,14 +37,14 @@ system_parameter_dict["Delta"] = Delta
 system_parameter_dict["interqubit_coupling_strength"] = g
 
 cold_bath_parameter_dict = {}
-cold_bath_parameter_dict["alpha"] = 0.5
-cold_bath_parameter_dict["Gamma"] = 0.04
-cold_bath_parameter_dict["omega0"] = 10
+cold_bath_parameter_dict["alpha"] = alpha_cold
+cold_bath_parameter_dict["Gamma"] = Gamma_cold
+cold_bath_parameter_dict["omega0"] = omega0_cold
 
 hot_bath_parameter_dict = {}
-hot_bath_parameter_dict["alpha"] = 0.2
-hot_bath_parameter_dict["Gamma"] = 0.01
-hot_bath_parameter_dict["omega0"]= 2
+hot_bath_parameter_dict["alpha"] = alpha_hot
+hot_bath_parameter_dict["Gamma"] = Gamma_hot
+hot_bath_parameter_dict["omega0"]= omega0_hot
 
 '''
 Build spectral densities and baths
