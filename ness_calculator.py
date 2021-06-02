@@ -151,7 +151,8 @@ def build_HamSS(max_occupation_number,system_parameter_dict,
 # if truncation_method == "max_excitation_number", then max_occupation_number is interpreted as the largest excitation number of the two RCs included in the truncation
 # i.e. if max_occupation_number = 3 and truncation_method == "max_excitation_number", then the set of basis states spanning the truncated RC space is
 # { Ket(0,0), Ket(0,1), Ket(0,2), Ket(0,3), Ket(1,0), Ket(1,1), Ket(1,2), Ket(2,0), Ket(2,1), Ket(3,0) }
-def build_Liouvillian(max_occupation_number,system_parameter_dict,cold_bath,hot_bath,truncation_method):
+# if element in Liouvillian is smaller than drop_tolerance, it is set to zero. May improve sparcity. 
+def build_Liouvillian(max_occupation_number,system_parameter_dict,cold_bath,hot_bath,truncation_method,drop_tolerance=0):
     
     # build HamSS for given parameters
     HamSS = build_HamSS(max_occupation_number,system_parameter_dict,cold_bath.spectral_density,hot_bath.spectral_density,truncation_method)
@@ -163,7 +164,7 @@ def build_Liouvillian(max_occupation_number,system_parameter_dict,cold_bath,hot_
     # calculate eigensystem of HamSS numerically
     debug_message("\tCalculating supersystem Hamiltonian eigenvectors...")
     # qutip documentation says sparse solver is slower than dense solver, only use sparse if memory is limiting calculation speed
-    eigenvalues, eigenstates = HamSS.eigenstates(sparse = True, tol = 1e-20, maxiter = 10000)
+    eigenvalues, eigenstates = HamSS.eigenstates(sparse = True, tol = 1e-20, maxiter = 100000)
     
     debug_message("\t\t...Supersystem eigenvectors successfully calculated!")
     
@@ -241,20 +242,22 @@ def build_Liouvillian(max_occupation_number,system_parameter_dict,cold_bath,hot_
     hot_liouvillian  =  - spre(A_hot * chi_operator_hot) + spre(A_hot)*spost(chi_operator_hot) + spre(chi_operator_hot)*spost(A_hot) - spost(chi_operator_hot * A_hot) - spre(A_hot * Xi_operator_hot) - spre(A_hot) * spost(Xi_operator_hot) +spre(Xi_operator_hot) * spost(A_hot) + spost(Xi_operator_hot * A_hot)
     
     final_liouvillian = unitary_liouvillian + cold_liouvillian + hot_liouvillian
+
+    if drop_tolerance > 0:
+        final_liouvillian = final_liouvillian.tidyup(drop_tolerance)
     return final_liouvillian
 
 
 def solve_supersystem_steady_state(liouvillian, solver_method, absolute_tolerance):
     # see qutip documentation Section 3.6.2 for relevant information on steady state solver
     debug_message("\tCalculating steady state from Liouvillian...")
-    rhoSS_steady = steadystate(liouvillian, method=solver_method, sparse=True, tol = absolute_tolerance,maxiter = 30000,use_precond = True)
+    rhoSS_steady = steadystate(liouvillian, method=solver_method, sparse=True, tol = absolute_tolerance,maxiter = 100000,use_precond = True)
     debug_message("\t\t...Steady state successfully calculated!")
     return rhoSS_steady
     
 def solve_system_steady_state(liouvillian, solver_method, absolute_tolerance):
     rhoSS_steady = solve_supersystem_steady_state(liouvillian, solver_method, absolute_tolerance)
     rhoS_steady = rhoSS_steady.ptrace([0,1])
-    print(rhoS_steady.dims)
     return rhoS_steady
    
 def find_max_absolute_difference_between_populations(rho1, rho2):

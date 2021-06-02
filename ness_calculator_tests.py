@@ -1,4 +1,4 @@
-from NESS_calculator_UD_UD import *
+from ness_calculator import *
 import unittest
 import numpy.testing
 from scipy.sparse import csr_matrix
