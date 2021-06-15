@@ -262,5 +262,132 @@ class TestThermalisation(unittest.TestCase) :
         plt.savefig("test_plots/hot_coherence.png")
         plt.clf()
 
+class TestPartialTrace(unittest.TestCase):
+
+    def test_build_basis_set(self):
+        basis1 = build_basis_set(1)
+        basis3 = build_basis_set(3)
+        basis5 = build_basis_set(5)
+
+        expected_basis1 = [basis(1,0)]
+        expected_basis3 = [basis(3,0),basis(3,1),basis(3,2)]
+        expected_basis5 = [basis(5,0),basis(5,1),basis(5,2),basis(5,3),basis(5,4)]
+
+        for i in range(0,len(basis1)):
+            np.testing.assert_array_equal(basis1[i].full(),expected_basis1[i].full())
+        for i in range(0,len(basis3)):
+            np.testing.assert_array_equal(basis3[i].full(),expected_basis3[i].full())
+        for i in range(0,len(basis5)):
+            np.testing.assert_array_equal(basis5[i].full(),expected_basis5[i].full())
+        for i in range(0,len(expected_basis1)):
+            np.testing.assert_array_equal(basis1[i].full(),expected_basis1[i].full())
+        for i in range(0,len(expected_basis3)):
+            np.testing.assert_array_equal(basis3[i].full(),expected_basis3[i].full())
+        for i in range(0,len(expected_basis5)):
+            np.testing.assert_array_equal(basis5[i].full(),expected_basis5[i].full())
+
+    def test_ptrace_enr_evironments(self):
+        # define states of systems and environments
+        system1 = thermal_dm(5,2)
+        system2 = thermal_dm(3,0.5)
+        environments1 = enr_thermal_dm([3,4],2,1.2)
+        environments2 = enr_thermal_dm([3,2],2,1.2)
+        # check set up correctly
+        self.assertEqual(system1.type, 'oper')
+        self.assertEqual(system1.shape, (5,5))
+        self.assertEqual(system1.dims, [[5],[5]])
+        self.assertEqual(system2.type, 'oper')
+        self.assertEqual(system2.shape, (3,3))
+        self.assertEqual(system2.dims, [[3],[3]])
+        self.assertEqual(environments1.type, 'oper')
+        self.assertEqual(environments1.shape, (6,6))
+        self.assertEqual(environments1.dims, [[3,4],[3,4]])
+        self.assertEqual(environments2.type, 'oper')
+        self.assertEqual(environments2.shape, (5,5))
+        self.assertEqual(environments2.dims, [[3,2],[3,2]])
+        # form composite system states
+        composite_system1 = tensor(system1,system2,environments1)
+        composite_system2 = tensor(system1,system2,environments2)
+        # check dimensions
+        self.assertEqual(composite_system1.shape, (90,90))
+        self.assertEqual(composite_system1.dims, [[5,3,3,4],[5,3,3,4]])
+        self.assertEqual(composite_system2.shape, (75,75)) 
+        self.assertEqual(composite_system2.dims, [[5,3,3,2],[5,3,3,2]])
+        # peform partial traces and check type and dimensions of output are as expected
+        with self.subTest("all modes of higher dimension than max_excitation_number"):
+            reduced_state1 = partial_trace_enr_environment(composite_system1,2)
+            self.assertEqual(reduced_state1.type, 'oper')
+            self.assertEqual(reduced_state1.dims, [[5,3],[5,3]])
+            self.assertEqual(reduced_state1.shape, (15,15))
+        with self.subTest("one mode of lower dimension than max_excitation_number"):
+            reduced_state2 = partial_trace_enr_environment(composite_system2,2)
+            self.assertEqual(reduced_state2.type, 'oper')
+            self.assertEqual(reduced_state2.dims, [[5,3],[5,3]])
+            self.assertEqual(reduced_state2.shape, (15,15))
+
+        # check that partial trace gives correct reduced state for simplest case
+        system1 = thermal_dm(5,2)
+        system2 = thermal_dm(3,0.5)
+        system3 = 0.25 * qeye(4)
+
+        expected_output1 = tensor(system1,system2)
+        expected_output2 = tensor(system2,system1)
+        expected_output3 = tensor(system1,system3)
+        
+        composite_system_enr_identity1 = tensor(system1,system2,enr_identity([3,4],3))
+        composite_system_enr_identity2 = tensor(system2,system1,enr_identity([4,3],3))
+        composite_system_enr_identity3 = tensor(system1, 0.25*qeye(4), enr_identity([2,2],1))
+        
+        traced_composite_system_enr_identity1 = partial_trace_enr_environment(composite_system_enr_identity1,3)
+        traced_composite_system_enr_identity2 = partial_trace_enr_environment(composite_system_enr_identity2,3)
+        traced_composite_system_enr_identity3 = partial_trace_enr_environment(composite_system_enr_identity3,1)
+        
+        with self.subTest("partial tracing enr_identity environment: case 1 - size check"):
+            np.testing.assert_array_equal(traced_composite_system_enr_identity1.dims, expected_output1.dims)
+            self.assertEqual(traced_composite_system_enr_identity1.full().size,expected_output1.full().size)
+        with self.subTest("partial tracing enr_identity environment: case 1 - elementwise check"):
+            for n in range(0, len(expected_output1.full())):
+                for m in range(0,len(expected_output1.full()[0])):
+                    with self.subTest(f"n,m={n,m}"):
+                        self.assertEqual(traced_composite_system_enr_identity1.full()[n][m], expected_output1.full()[n][m])
+            for n in range(0, len(traced_composite_system_enr_identity1.full())):
+                for m in range(0,len(traced_composite_system_enr_identity1.full()[0])):
+                    with self.subTest(f"n,m={n,m}"):
+                        self.assertEqual(traced_composite_system_enr_identity1.full()[n][m], expected_output1.full()[n][m])
+
+        with self.subTest("partial tracing enr_identity environment: case 2 - size check"):
+            np.testing.assert_array_equal(traced_composite_system_enr_identity2.dims, expected_output2.dims)
+            self.assertEqual(traced_composite_system_enr_identity2.full().size,expected_output2.full().size)
+        with self.subTest("partial tracing enr_identity environment: case 2 - elementwise check"):
+            for n in range(0, len(expected_output2.full())):
+                for m in range(0,len(expected_output2.full()[0])):
+                    with self.subTest(f"n,m={n,m}"):
+                        self.assertEqual(traced_composite_system_enr_identity2.full()[n][m], expected_output2.full()[n][m])
+            for n in range(0, len(traced_composite_system_enr_identity2.full())):
+                for m in range(0,len(traced_composite_system_enr_identity2.full()[0])):
+                    with self.subTest(f"n,m={n,m}"):
+                        self.assertEqual(traced_composite_system_enr_identity2.full()[n][m], expected_output2.full()[n][m])
+
+        with self.subTest("partial tracing enr_identity environment: case 3 - size check"):
+            np.testing.assert_array_equal(traced_composite_system_enr_identity3.dims, expected_output3.dims)
+            self.assertEqual(traced_composite_system_enr_identity3.full().size,expected_output3.full().size)
+        with self.subTest("partial tracing enr_identity environment: case 3 - elementwise check"):
+            for n in range(0, len(expected_output3.full())):
+                for m in range(0,len(expected_output3.full()[0])):
+                    with self.subTest(f"n,m={n,m}"):
+                        self.assertEqual(traced_composite_system_enr_identity3.full()[n][m], expected_output3.full()[n][m])
+            for n in range(0, len(traced_composite_system_enr_identity3.full())):
+                for m in range(0,len(traced_composite_system_enr_identity3.full()[0])):
+                    with self.subTest(f"n,m={n,m}"):
+                        self.assertEqual(traced_composite_system_enr_identity3.full()[n][m], expected_output3.full()[n][m])
+        
+class TestNumpyFunctions(unittest.TestCase):
+    # just want to check that array manipulations actually work like I think they do
+    def test_take(self):
+        drho = [2,3,4]
+        sel = [0,1]
+        dims_short = np.asarray(drho).take(sel)
+        self.assertEqual(dims_short.tolist(), [2,3])
+
 if __name__ == "__main__" :
     unittest.main()

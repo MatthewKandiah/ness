@@ -50,7 +50,7 @@ SOLVER_TOLERANCE = 1e-12
 
 print("Constructing and solving problems for time comparison...")
 # calculate supersystem steady state using both "simple" and "max_excitation_number" truncations
-max_occupation_number = 5
+max_occupation_number = 3
 start_time = time()
 liouvillian_simple = nc.build_Liouvillian(max_occupation_number,system_parameter_dict,cold_bath,hot_bath,'simple')
 construction_time_liouvillian_simple = time()

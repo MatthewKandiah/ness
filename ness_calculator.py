@@ -2,6 +2,7 @@ import numpy as np
 import scipy.stats
 from qutip import *
 import matplotlib.pyplot as plt
+import math
 
 # set to true to print extra information to console
 DEBUG = True
@@ -331,3 +332,83 @@ def binary_entropy(x) :
 def convert_concurrence_to_entanglement_of_formation(concurrence):
     x = (1 + np.sqrt(1-concurrence**2))/2
     return binary_entropy(x)
+
+def build_basis_set(dimensions):
+    basis_set = []
+    for i in range(0,dimensions):
+        basis_set.append(basis(dimensions, i))
+    return basis_set
+
+def partial_trace_enr_environment(composite_state, max_excitation_number):
+    # Assume that composite_state is a QObj defined as a tensor product.
+    # Tensor product order 2 systems, followed by a single enr state
+    # which describes 2 modes.
+
+    # The strategy here will be to build the non-enr state from the enr-state
+    # Then we will be able to use the normal ptrace method
+    system1_dim = composite_state.dims[0][0]
+    system2_dim = composite_state.dims[0][1]
+    environment1_dim = composite_state.dims[0][2]
+    environment2_dim = composite_state.dims[0][3]
+    environment_dims = [environment1_dim, environment2_dim]
+
+    non_enr_shape = (math.prod(composite_state.dims[0]),math.prod(composite_state.dims[0]))
+    enr_shape = composite_state.shape
+
+    system1_basis = build_basis_set(system1_dim)
+    system2_basis = build_basis_set(system2_dim)
+    environment1_basis = build_basis_set(environment1_dim)
+    environment2_basis = build_basis_set(environment2_dim)
+
+    composite_basis = []
+    q1_list = []
+    q2_list = []
+    n1_list = []
+    n2_list = []
+    excitation_count= []
+    for q1 in range(0,len(system1_basis)):
+        for q2 in range(0,len(system2_basis)):
+            for n1 in range(0,len(environment1_basis)):
+                for n2 in range(0,len(environment2_basis)):
+                    # store quantum numbers associated with each part of each basis vector, needed later to correctly extract coefficients
+                    q1_list.append(q1)
+                    q2_list.append(q2)
+                    n1_list.append(n1)
+                    n2_list.append(n2)
+
+                    composite_basis.append(tensor(system1_basis[q1],system2_basis[q2],environment1_basis[n1],environment2_basis[n2]))
+                    excitation_count.append(n1+n2)
+
+    debug_message("Building standardised state from state with enr-environment...")
+    untruncated_composite_state = 0
+    for c1 in range(0,len(composite_basis)):
+        for c2 in range(0,len(composite_basis)):
+            # pick out 2 basis kets in the non-enr truncated space
+            basis_ket1 = composite_basis[c1]
+            basis_ket2 = composite_basis[c2]
+            if excitation_count[c1] <= max_excitation_number and excitation_count[c2] <= max_excitation_number:
+                # both states lie within the enr-truncated subspace, therefore may have non-zero matrix elements
+                # extract quantum numbers for one basis ket
+                q11 = q1_list[c1]
+                q21 = q2_list[c1]
+                n11 = n1_list[c1]
+                n21 = n2_list[c1]
+                # extract quantum numbers for the seconds basis ket
+                q12 = q1_list[c2]
+                q22 = q2_list[c2]
+                n12 = n1_list[c2]
+                n22 = n2_list[c2]
+                # rebuild the basis ket in the enr-truncated space
+                enr_basis_ket1 = tensor(system1_basis[q11],system2_basis[q21],enr_fock(environment_dims,max_excitation_number,[n11,n21]))
+                enr_basis_ket2 = tensor(system1_basis[q12],system2_basis[q22],enr_fock(environment_dims,max_excitation_number,[n12,n22]))
+                coefficient = enr_basis_ket1.dag() * composite_state * enr_basis_ket2
+
+            else:
+                # at least one selected basis ket lies outside of the truncated space, therefore we have assumed its matrix element to be negligible 
+                coefficient = 0
+
+            untruncated_composite_state += coefficient * basis_ket1 * basis_ket2.dag()
+    debug_message("Calculating partial trace of standardised state...")
+    reduced_state = untruncated_composite_state.ptrace([0,1])
+    
+    return reduced_state    
